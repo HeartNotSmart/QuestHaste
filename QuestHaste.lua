@@ -12,13 +12,10 @@ local QuestHaste_EventList = {
 local QuestHaste_Usage = [[
 |cffffff00## QuestHaste Usage:
 
-* Quest (active and available) opening/progress modifiers
-    * Control   auto complete/accept and save
-    * Alt   forget
-    * Shift   complete/accept if not saved, hold if saved
-    * No Modifier   complete/accept if saved
-* Gossip opening modifiers
-    * Shift   auto complete/accept quest in gossip
+* Quest opening/progress
+    * complete/accept if saved
+* Gossip opening
+    * auto complete/accept quest in gossip
         (priority: completed, available saved,
         active saved, available, active)
 * Command line options (/qhaste, /questhaste):
@@ -53,15 +50,6 @@ local function filterEvens(t)
     return r
 end
 
-local function contained(t,val)
-    for _,v in t do
-        if v == val then
-            return true
-        end
-    end
-    return false
-end
-
 local function menuHandler(available, active, name, accept, complete)
     local function SetupBackground(b)
         b:SetAllPoints(b:GetParent()) b:SetDrawLayer("BACKGROUND",-1) b:SetTexture(1,1,1) b:SetGradientAlpha("HORIZONTAL", 0.5, 1, 0, 0.5, 1, 1, 0, 0)
@@ -74,17 +62,7 @@ local function menuHandler(available, active, name, accept, complete)
             f.QHaste = {background = f:CreateTexture(), oldScript = f:GetScript("OnClick")}
             SetupBackground(f.QHaste.background)
             local function OnClick(...)
-                local title = f:GetText()
-                if IsAltKeyDown() and QuestHaste.autolist[title] then
-                    if contained(available, title) then
-                        QuestHaste_RemoveAutoAccept(title)
-                    else
-                        QuestHaste_RemoveAutoComplete(title)
-                    end
-                    f.QHaste.background:Hide()
-                else
-                    f.QHaste.oldScript(unpack(arg))
-                end
+                f.QHaste.oldScript(unpack(arg))
             end
             f:SetScript("OnClick",OnClick)
         end
@@ -94,48 +72,46 @@ local function menuHandler(available, active, name, accept, complete)
             f.QHaste.background:Hide()
         end
     end
-    if IsShiftKeyDown() then
-        local logCompleted = {}
-        for k = 1,GetNumQuestLogEntries() do
-            local title, _, _, _, _, completed = GetQuestLogTitle(k)
-            if completed then
-                logCompleted[title] = true
-            end
+    local logCompleted = {}
+    for k = 1,GetNumQuestLogEntries() do
+        local title, _, _, _, _, completed = GetQuestLogTitle(k)
+        if completed then
+            logCompleted[title] = true
         end
-        for k,v in active do
-            if logCompleted[v] then
-                QuestHaste.currentQuest = v
-                complete(k)
-                return
-            end
+    end
+    for k,v in active do
+        if logCompleted[v] then
+            QuestHaste.currentQuest = v
+            complete(k)
+            return
         end
-        
-        for k,v in available do
-            if QuestHaste_IsAutoAccept(v) then
-                QuestHaste.currentQuest = v
-                accept(k)
-                return
-            end
+    end
+    
+    for k,v in available do
+        if QuestHaste_IsAutoAccept(v) then
+            QuestHaste.currentQuest = v
+            accept(k)
+            return
         end
+    end
 
-        for k,v in active do
-            if QuestHaste_IsAutoComplete(v) then
-                QuestHaste.currentQuest = v
-                complete(k)
-                return
-            end
-        end
-        
-        if next(available) then
-            QuestHaste.currentQuest = available[1]
-            accept(1)
+    for k,v in active do
+        if QuestHaste_IsAutoComplete(v) then
+            QuestHaste.currentQuest = v
+            complete(k)
             return
         end
-        if next(active) then
-            QuestHaste.currentQuest = active[1]
-            complete(1)
-            return
-        end
+    end
+    
+    if next(available) then
+        QuestHaste.currentQuest = available[1]
+        accept(1)
+        return
+    end
+    if next(active) then
+        QuestHaste.currentQuest = active[1]
+        complete(1)
+        return
     end
 end
     
@@ -163,13 +139,7 @@ end
 function QuestHaste_EventHandler.QUEST_PROGRESS()
     local title = GetTitleText()
     
-    if IsControlKeyDown() then
-        QuestHaste_AddAutoComplete(title)
-    elseif IsAltKeyDown() then
-        QuestHaste_RemoveAutoComplete(title) return
-    end
-
-    if (QuestHaste.currentQuest == title or QuestHaste_IsAutoComplete(title) ~= (IsShiftKeyDown() ~= nil)) and IsQuestCompletable() then
+    if (QuestHaste.currentQuest == title or QuestHaste_IsAutoComplete(title)) and IsQuestCompletable() then
         QuestHaste.currentQuest = title
         CompleteQuest()
     else
@@ -180,10 +150,7 @@ end
 function QuestHaste_EventHandler.QUEST_COMPLETE()
     local title = GetTitleText()
     
-    if IsControlKeyDown() then QuestHaste_AddAutoComplete(title)
-    elseif IsAltKeyDown() then QuestHaste_RemoveAutoComplete(title) return end
-    
-    if (QuestHaste.currentQuest == title or QuestHaste_IsAutoComplete(title) ~= (IsShiftKeyDown() ~= nil)) and GetNumQuestChoices() == 0 then
+    if (QuestHaste.currentQuest == title or QuestHaste_IsAutoComplete(title)) and GetNumQuestChoices() == 0 then
         GetQuestReward()
     end
     QuestHaste.currentQuest = ""
@@ -192,10 +159,7 @@ end
 function QuestHaste_EventHandler.QUEST_DETAIL()
     local title = GetTitleText()
     
-    if IsControlKeyDown() then QuestHaste_AddAutoAccept(title)
-    elseif IsAltKeyDown() then QuestHaste_RemoveAutoAccept(title) return end
-
-    if QuestHaste.currentQuest == title or QuestHaste_IsAutoAccept(title) ~= (IsShiftKeyDown() ~= nil) then
+    if QuestHaste.currentQuest == title or QuestHaste_IsAutoAccept(title) then
         AcceptQuest()
     else
         QuestHaste.currentQuest = ""
@@ -270,7 +234,7 @@ end
 
 function QuestHaste_RemoveAutoAccept(title)
     if not QuestHaste_IsAutoAccept(title) then return end
-    if QuestHaste_IsComplete(title) then
+    if QuestHaste_IsAutoComplete(title) then
         QuestHaste.autolist[title].accept = false
     else
         QuestHaste.autolist[title] = nil
