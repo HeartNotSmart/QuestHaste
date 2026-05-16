@@ -6,7 +6,9 @@ local QuestHaste_EventList = {
     "QUEST_COMPLETE",
     "QUEST_DETAIL",
     "GOSSIP_SHOW",
-    "QUEST_GREETING"
+    "GOSSIP_CLOSED",
+    "QUEST_GREETING",
+    "QUEST_FINISHED"
 }
 
 local QuestHaste_Usage = [[
@@ -46,6 +48,34 @@ local function filterEvens(t)
     return r
 end
 
+local function resetAttempts()
+    QuestHaste.attempted = {}
+end
+
+local function resetAttemptsIfClosed()
+    if not GossipFrame:IsShown() and not QuestFrame:IsShown() then
+        resetAttempts()
+        QuestHaste.currentQuest = ""
+    end
+end
+
+local function alreadyTried(action, title)
+    if title == nil or title == "" then
+        return true
+    end
+    if QuestHaste.attempted == nil then
+        resetAttempts()
+    end
+
+    local key = action..":"..title
+    if QuestHaste.attempted[key] then
+        return true
+    end
+
+    QuestHaste.attempted[key] = true
+    return false
+end
+
 local function menuHandler(available, active, name, accept, complete)
     local function SetupBackground(b)
         b:SetAllPoints(b:GetParent()) b:SetDrawLayer("BACKGROUND",-1) b:SetTexture(1,1,1) b:SetGradientAlpha("HORIZONTAL", 0.5, 1, 0, 0.5, 1, 1, 0, 0)
@@ -72,26 +102,31 @@ local function menuHandler(available, active, name, accept, complete)
         end
     end
     for k,v in active do
-        if logCompleted[v] then
+        if logCompleted[v] and not alreadyTried("complete-menu", v) then
             QuestHaste.currentQuest = v
             complete(k)
             return
         end
     end
 
-    if next(available) then
-        QuestHaste.currentQuest = available[1]
-        accept(1)
-        return
+    for k,v in available do
+        if not alreadyTried("accept-menu", v) then
+            QuestHaste.currentQuest = v
+            accept(k)
+            return
+        end
     end
-    if next(active) then
-        QuestHaste.currentQuest = active[1]
-        complete(1)
-        return
+    for k,v in active do
+        if not alreadyTried("complete-menu", v) then
+            QuestHaste.currentQuest = v
+            complete(k)
+            return
+        end
     end
 end
     
 function QuestHaste_EventHandler.GOSSIP_SHOW()
+    if not GossipFrame:IsShown() then return end
     local available = filterEvens({GetGossipAvailableQuests()})
     local active = filterEvens({GetGossipActiveQuests()})
     local name = "GossipTitleButton"
@@ -99,6 +134,7 @@ function QuestHaste_EventHandler.GOSSIP_SHOW()
 end
 
 function QuestHaste_EventHandler.QUEST_GREETING()
+    if not QuestFrame:IsShown() then return end
     local available = {}
     local active = {}
     for k = 1, GetNumAvailableQuests() do
@@ -113,8 +149,11 @@ end
     
 
 function QuestHaste_EventHandler.QUEST_PROGRESS()
-    if IsQuestCompletable() then
-        QuestHaste.currentQuest = GetTitleText()
+    if not QuestFrame:IsShown() then return end
+
+    local title = GetTitleText()
+    if IsQuestCompletable() and not alreadyTried("progress", title) then
+        QuestHaste.currentQuest = title
         CompleteQuest()
     else
         QuestHaste.currentQuest = ""
@@ -122,19 +161,36 @@ function QuestHaste_EventHandler.QUEST_PROGRESS()
 end
 
 function QuestHaste_EventHandler.QUEST_COMPLETE()
-    if GetNumQuestChoices() == 0 then
+    if not QuestFrame:IsShown() then return end
+
+    local title = GetTitleText()
+    if GetNumQuestChoices() == 0 and not alreadyTried("reward", title) then
         GetQuestReward()
     end
     QuestHaste.currentQuest = ""
 end
 
 function QuestHaste_EventHandler.QUEST_DETAIL()
-    AcceptQuest()
+    if not QuestFrame:IsShown() then return end
+
+    local title = GetTitleText()
+    if not alreadyTried("detail", title) then
+        AcceptQuest()
+    end
+end
+
+function QuestHaste_EventHandler.GOSSIP_CLOSED()
+    resetAttemptsIfClosed()
+end
+
+function QuestHaste_EventHandler.QUEST_FINISHED()
+    resetAttemptsIfClosed()
 end
 
 function QuestHaste_EventHandler.ADDON_LOADED()
     if arg1 == "QuestHaste" then
         QuestHaste = QuestHaste or {}
+        resetAttempts()
         QuestHaste_RegisterEvents()
         QuestHaste_EventHandler:UnregisterEvent("ADDON_LOADED")
         DEFAULT_CHAT_FRAME:AddMessage("|cffffff88QuestHaste|r loaded. See /qhaste usage")
