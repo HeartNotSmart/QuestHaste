@@ -6,29 +6,27 @@ local QuestHaste_EventList = {
     "QUEST_COMPLETE",
     "QUEST_DETAIL",
     "GOSSIP_SHOW",
-    "QUEST_GREETING"
+    "GOSSIP_CLOSED",
+    "PLAYER_TARGET_CHANGED",
+    "QUEST_GREETING",
+    "QUEST_FINISHED",
+    "UI_ERROR_MESSAGE"
 }
 
 local QuestHaste_Usage = [[
 |cffffff00## QuestHaste Usage:
 
-* Quest (active and available) opening/progress modifiers
-    * Control   auto complete/accept and save
-    * Alt   forget
-    * Shift   complete/accept if not saved, hold if saved
-    * No Modifier   complete/accept if saved
+* Quest (active and available) opening/progress
+    * complete/accept
 * Gossip opening modifiers
-    * Shift   auto complete/accept quest in gossip
-        (priority: completed, available saved,
-        active saved, available, active)
+    * Shift   pause automation for this interaction
+    * No Modifier   auto complete/accept quest in gossip
+        (priority: completed, available, active)
 * Command line options (/qhaste, /questhaste):
     * usage   display usage instructions
-    * add   saves current quest
-    * list   list all saved quests
     * pause   disable QuestHaste
     * resume   activate QuestHaste
-    * complete   complete/accept current quest
-    * reset   clears all saved quests|r
+    * complete   complete/accept current quest|r
 ]]
 
 function QuestHaste_RegisterEvents()
@@ -53,12 +51,78 @@ local function filterEvens(t)
     return r
 end
 
-local function contained(t,val)
-    for _,v in t do
-        if v == val then
-            return true
-        end
+local function resetAttempts()
+    QuestHaste.attempted = {}
+    QuestHaste.suspended = false
+    QuestHaste.suspendedAt = nil
+    QuestHaste.shiftPaused = false
+    QuestHaste.currentQuest = ""
+end
+
+local function closeInteraction()
+    QuestHaste.currentQuest = ""
+    QuestHaste.suspended = true
+    QuestHaste.suspendedAt = GetTime()
+
+    if CloseQuest then CloseQuest() end
+    if CloseGossip then CloseGossip() end
+    if HideUIPanel and QuestFrame and QuestFrame:IsShown() then HideUIPanel(QuestFrame) end
+    if HideUIPanel and GossipFrame and GossipFrame:IsShown() then HideUIPanel(GossipFrame) end
+end
+
+local function allowRetryAfterSuspension()
+    if not QuestHaste.suspended then
+        return true
     end
+
+    if QuestHaste.suspendedAt and GetTime() - QuestHaste.suspendedAt > 1 then
+        resetAttempts()
+        return true
+    end
+
+    return false
+end
+
+local function pauseForShift()
+    if IsShiftKeyDown() then
+        QuestHaste.shiftPaused = true
+        QuestHaste.currentQuest = ""
+        return true
+    end
+
+    if QuestHaste.shiftPaused then
+        resetAttempts()
+    end
+
+    return false
+end
+
+local function resetAttemptsIfClosed()
+    if QuestHaste.suspended then
+        QuestHaste.currentQuest = ""
+        return
+    end
+
+    if not GossipFrame:IsShown() and not QuestFrame:IsShown() then
+        resetAttempts()
+        QuestHaste.currentQuest = ""
+    end
+end
+
+local function alreadyTried(action, title)
+    if title == nil or title == "" then
+        return true
+    end
+    if QuestHaste.attempted == nil then
+        resetAttempts()
+    end
+
+    local key = action..":"..title
+    if QuestHaste.attempted[key] then
+        return true
+    end
+
+    QuestHaste.attempted[key] = true
     return false
 end
 
@@ -74,72 +138,53 @@ local function menuHandler(available, active, name, accept, complete)
             f.QHaste = {background = f:CreateTexture(), oldScript = f:GetScript("OnClick")}
             SetupBackground(f.QHaste.background)
             local function OnClick(...)
-                local title = f:GetText()
-                if IsAltKeyDown() and QuestHaste.autolist[title] then
-                    if contained(available, title) then
-                        QuestHaste_RemoveAutoAccept(title)
-                    else
-                        QuestHaste_RemoveAutoComplete(title)
-                    end
-                    f.QHaste.background:Hide()
-                else
-                    f.QHaste.oldScript(unpack(arg))
-                end
+                f.QHaste.oldScript(unpack(arg))
             end
             f:SetScript("OnClick",OnClick)
         end
-        if QuestHaste.autolist[f:GetText()] then
-            f.QHaste.background:Show()
-        else
-            f.QHaste.background:Hide()
+        f.QHaste.background:Hide()
+    end
+    local logCompleted = {}
+    for k = 1,GetNumQuestLogEntries() do
+        local title, _, _, _, _, completed = GetQuestLogTitle(k)
+        if completed then
+            logCompleted[title] = true
         end
     end
-    if IsShiftKeyDown() then
-        local logCompleted = {}
-        for k = 1,GetNumQuestLogEntries() do
-            local title, _, _, _, _, completed = GetQuestLogTitle(k)
-            if completed then
-                logCompleted[title] = true
-            end
+    for k,v in active do
+        if logCompleted[v] and not alreadyTried("complete-menu", v) then
+            QuestHaste.currentQuest = v
+            complete(k)
+            return
         end
-        for k,v in active do
-            if logCompleted[v] then
-                QuestHaste.currentQuest = v
-                complete(k)
-                return
-            end
-        end
-        
-        for k,v in available do
-            if QuestHaste_IsAutoAccept(v) then
-                QuestHaste.currentQuest = v
-                accept(k)
-                return
-            end
-        end
+    end
 
-        for k,v in active do
-            if QuestHaste_IsAutoComplete(v) then
-                QuestHaste.currentQuest = v
-                complete(k)
-                return
-            end
-        end
-        
-        if next(available) then
-            QuestHaste.currentQuest = available[1]
-            accept(1)
+    local triedAny = false
+    for k,v in available do
+        triedAny = true
+        if not alreadyTried("accept-menu", v) then
+            QuestHaste.currentQuest = v
+            accept(k)
             return
         end
-        if next(active) then
-            QuestHaste.currentQuest = active[1]
-            complete(1)
+    end
+    for k,v in active do
+        triedAny = true
+        if not alreadyTried("complete-menu", v) then
+            QuestHaste.currentQuest = v
+            complete(k)
             return
         end
+    end
+    if triedAny then
+        closeInteraction()
     end
 end
     
 function QuestHaste_EventHandler.GOSSIP_SHOW()
+    if pauseForShift() then return end
+    if not allowRetryAfterSuspension() then return end
+    if not GossipFrame:IsShown() then return end
     local available = filterEvens({GetGossipAvailableQuests()})
     local active = filterEvens({GetGossipActiveQuests()})
     local name = "GossipTitleButton"
@@ -147,6 +192,9 @@ function QuestHaste_EventHandler.GOSSIP_SHOW()
 end
 
 function QuestHaste_EventHandler.QUEST_GREETING()
+    if pauseForShift() then return end
+    if not allowRetryAfterSuspension() then return end
+    if not QuestFrame:IsShown() then return end
     local available = {}
     local active = {}
     for k = 1, GetNumAvailableQuests() do
@@ -161,61 +209,77 @@ end
     
 
 function QuestHaste_EventHandler.QUEST_PROGRESS()
-    local title = GetTitleText()
-    
-    if IsControlKeyDown() then
-        QuestHaste_AddAutoComplete(title)
-    elseif IsAltKeyDown() then
-        QuestHaste_RemoveAutoComplete(title) return
-    end
+    if pauseForShift() then return end
+    if QuestHaste.shiftPaused then return end
+    if QuestHaste.suspended then return end
+    if not QuestFrame:IsShown() then return end
 
-    if (QuestHaste.currentQuest == title or QuestHaste_IsAutoComplete(title) ~= (IsShiftKeyDown() ~= nil)) and IsQuestCompletable() then
+    local title = GetTitleText()
+    if IsQuestCompletable() and not alreadyTried("progress", title) then
         QuestHaste.currentQuest = title
         CompleteQuest()
     else
-        QuestHaste.currentQuest = ""
+        closeInteraction()
     end
 end
 
 function QuestHaste_EventHandler.QUEST_COMPLETE()
+    if pauseForShift() then return end
+    if QuestHaste.shiftPaused then return end
+    if QuestHaste.suspended then return end
+    if not QuestFrame:IsShown() then return end
+
     local title = GetTitleText()
-    
-    if IsControlKeyDown() then QuestHaste_AddAutoComplete(title)
-    elseif IsAltKeyDown() then QuestHaste_RemoveAutoComplete(title) return end
-    
-    if (QuestHaste.currentQuest == title or QuestHaste_IsAutoComplete(title) ~= (IsShiftKeyDown() ~= nil)) and GetNumQuestChoices() == 0 then
+    if GetNumQuestChoices() > 0 then
+        QuestHaste.currentQuest = ""
+        return
+    end
+
+    if not alreadyTried("reward", title) then
         GetQuestReward()
+    else
+        closeInteraction()
     end
     QuestHaste.currentQuest = ""
 end
 
 function QuestHaste_EventHandler.QUEST_DETAIL()
-    local title = GetTitleText()
-    
-    if IsControlKeyDown() then QuestHaste_AddAutoAccept(title)
-    elseif IsAltKeyDown() then QuestHaste_RemoveAutoAccept(title) return end
+    if pauseForShift() then return end
+    if QuestHaste.shiftPaused then return end
+    if QuestHaste.suspended then return end
+    if not QuestFrame:IsShown() then return end
 
-    if QuestHaste.currentQuest == title or QuestHaste_IsAutoAccept(title) ~= (IsShiftKeyDown() ~= nil) then
+    local title = GetTitleText()
+    if not alreadyTried("detail", title) then
         AcceptQuest()
     else
-        QuestHaste.currentQuest = ""
+        closeInteraction()
+    end
+end
+
+function QuestHaste_EventHandler.GOSSIP_CLOSED()
+    resetAttemptsIfClosed()
+end
+
+function QuestHaste_EventHandler.QUEST_FINISHED()
+    resetAttemptsIfClosed()
+end
+
+function QuestHaste_EventHandler.PLAYER_TARGET_CHANGED()
+    resetAttempts()
+    QuestHaste.currentQuest = ""
+end
+
+function QuestHaste_EventHandler.UI_ERROR_MESSAGE()
+    if (QuestHaste.currentQuest ~= nil and QuestHaste.currentQuest ~= "") or QuestFrame:IsShown() or GossipFrame:IsShown() then
+        closeInteraction()
     end
 end
 
 function QuestHaste_EventHandler.ADDON_LOADED()
     if arg1 == "QuestHaste" then
-        QuestHaste_Session = {}
-        if QuestHaste == nil or QuestHaste.autolist == nil then
-            QuestHaste = {autolist = {}, dataVersion = "1.0.0"}
-        end
-        if QuestHaste.dataVersion == nil then
-            local tmp = {}
-            for k,_ in QuestHaste.autolist do
-                tmp[k] = {complete=true}
-            end
-            QuestHaste.autolist = tmp
-            QuestHaste.dataVersion = "1.0.0"
-        end
+        QuestHaste = QuestHaste or {}
+        resetAttempts()
         QuestHaste_RegisterEvents()
         QuestHaste_EventHandler:UnregisterEvent("ADDON_LOADED")
         DEFAULT_CHAT_FRAME:AddMessage("|cffffff88QuestHaste|r loaded. See /qhaste usage")
@@ -230,69 +294,30 @@ QuestHaste_EventHandler:SetScript("OnEvent",
     end
 )
 
-function QuestHaste_IsAutoComplete(title)
-    return (QuestHaste.autolist[title] or false) and QuestHaste.autolist[title].complete
-end
-
-function QuestHaste_IsAutoAccept(title)
-    return (QuestHaste.autolist[title] or false) and QuestHaste.autolist[title].accept
-end
-
-function QuestHaste_AddAutoComplete(title)
-    if QuestHaste_IsAutoComplete(title) then return end
-    if QuestHaste.autolist[title] == nil then QuestHaste.autolist[title] = {} end
-    QuestHaste.autolist[title].complete = true
-    local msg = "|cffffff88QuestHaste|r: |cffffff00"..title.."|r |cff00ff00added|r."
-    UIErrorsFrame:AddMessage(msg)
-    DEFAULT_CHAT_FRAME:AddMessage(msg)
-end
-
-function QuestHaste_AddAutoAccept(title)
-    if QuestHaste_IsAutoAccept(title) then return end
-    if QuestHaste.autolist[title] == nil then QuestHaste.autolist[title] = {} end
-    QuestHaste.autolist[title].accept = true
-    local msg = "|cffffff88QuestHaste|r: |cffffff00"..title.."|r |cff00ff00added|r."
-    UIErrorsFrame:AddMessage(msg)
-    DEFAULT_CHAT_FRAME:AddMessage(msg)
-end
-
-function QuestHaste_RemoveAutoComplete(title)
-    if not QuestHaste_IsAutoComplete(title) then return end
-    if QuestHaste_IsAutoAccept(title) then
-        QuestHaste.autolist[title].complete = false
-    else 
-        QuestHaste.autolist[title] = nil
-    end
-    local msg = "|cffffff88QuestHaste|r: |cffffff00"..title.."|r |cffff0000removed|r."
-    UIErrorsFrame:AddMessage(msg)
-    DEFAULT_CHAT_FRAME:AddMessage(msg)
-end
-
-function QuestHaste_RemoveAutoAccept(title)
-    if not QuestHaste_IsAutoAccept(title) then return end
-    if QuestHaste_IsComplete(title) then
-        QuestHaste.autolist[title].accept = false
-    else
-        QuestHaste.autolist[title] = nil
-    end
-    local msg = "|cffffff88QuestHaste|r: |cffffff00"..title.."|r |cffff0000removed|r."
-    UIErrorsFrame:AddMessage(msg)
-    DEFAULT_CHAT_FRAME:AddMessage(msg)
-end
-
 function QuestHaste_Proceed()
+    if pauseForShift() then return end
+    if QuestHaste.shiftPaused then return end
+    if QuestHaste.suspended then return end
+
     if GossipFrame:IsShown() then
-        QuestHaste.currentQuest = GetGossipActiveQuests()
-        SelectGossipActiveQuest(1)
+        local title = GetGossipActiveQuests()
+        if not alreadyTried("complete-menu", title) then
+            QuestHaste.currentQuest = title
+            SelectGossipActiveQuest(1)
+        else
+            closeInteraction()
+        end
     elseif QuestFrame:IsShown() then
         local title = GetTitleText()
-        if QuestFrameAcceptButton:IsShown() then
+        if QuestFrameAcceptButton:IsShown() and not alreadyTried("detail", title) then
             AcceptQuest()
-        elseif QuestFrameCompleteButton:IsShown() and IsQuestCompletable() then
+        elseif QuestFrameCompleteButton:IsShown() and IsQuestCompletable() and not alreadyTried("progress", title) then
             QuestHaste.currentQuest = title
             CompleteQuest()
-        elseif QuestFrameCompleteQuestButton:IsShown() and IsQuestCompletable() then
+        elseif QuestFrameCompleteQuestButton:IsShown() and IsQuestCompletable() and not alreadyTried("reward", title) then
             GetQuestReward()
+        else
+            closeInteraction()
         end
     end
 end
@@ -301,47 +326,17 @@ local function CommandParser(msg, editbox)
     local _,_,command, rest = string.find(msg,"^(%S*)%s*(.-)$")
     if command == "usage" then
         DEFAULT_CHAT_FRAME:AddMessage(QuestHaste_Usage)
-    elseif command == "add" then
-        if QuestFrame:IsShown() then
-            local title = GetTitleText()
-            QuestHaste_AddAutoComplete(title)
-        else
-            UIErrorsFrame:AddMessage("QuestHaste: no active quest.",1,0,0)
-        end
-        QuestHaste_Proceed()
-    --elseif command == "remove" then
-    --    QuestHaste.autolist[title] = nil
-    elseif command == "list" then
-        DEFAULT_CHAT_FRAME:AddMessage("QuestHaste quest list:")
-        for k,v in QuestHaste.autolist do
-            DEFAULT_CHAT_FRAME:AddMessage("    "..k)
-            local opts = "        ("
-            if QuestHaste_IsAutoAccept(k) then
-                opts = opts .. "|cff00ff00"
-            else
-                opts = opts .. "|cffff0000"
-            end
-            opts = opts .. "accept|r | "
-            if QuestHaste_IsAutoComplete(k) then
-                opts = opts .. "|cff00ff00"
-            else
-                opts = opts .. "|cffff0000"
-            end
-            opts = opts .. "complete|r)"
-            DEFAULT_CHAT_FRAME:AddMessage(opts)
-        end
     elseif command == "pause" then
         DEFAULT_CHAT_FRAME:AddMessage("|cffffff88QuestHaste|r: |cffff0000paused|r.")
         QuestHaste_UnregisterEvents()
     elseif command == "resume" then
         DEFAULT_CHAT_FRAME:AddMessage("|cffffff88QuestHaste|r: |cff00ff00active|r.")
+        resetAttempts()
         QuestHaste_RegisterEvents()
     elseif command == "complete" then
         QuestHaste_Proceed()
-    elseif command == "reset" then
-        QuestHaste.autolist = {}
     else
-        DEFAULT_CHAT_FRAME:AddMessage("Syntax:\n/qhaste usage\n/qhaste add\n/qhaste list\n/qhaste complete\n/qhaste pause\n/qhaste resume\n/qhaste reset");
+        DEFAULT_CHAT_FRAME:AddMessage("Syntax:\n/qhaste usage\n/qhaste complete\n/qhaste pause\n/qhaste resume");
     end
 end
 SLASH_QUESTHASTE1 = "/questhaste"
