@@ -62,23 +62,6 @@ local function contained(t,val)
     return false
 end
 
-local function QuestHaste_IsKeyDown(keyFunc)
-    local state = keyFunc()
-    return state == 1 or state == true
-end
-
-local function QuestHaste_IsShiftDown()
-    return QuestHaste_IsKeyDown(IsShiftKeyDown)
-end
-
-local function QuestHaste_IsControlDown()
-    return QuestHaste_IsKeyDown(IsControlKeyDown)
-end
-
-local function QuestHaste_IsAltDown()
-    return QuestHaste_IsKeyDown(IsAltKeyDown)
-end
-
 local function menuHandler(available, active, name, accept, complete)
     local function SetupBackground(b)
         b:SetAllPoints(b:GetParent()) b:SetDrawLayer("BACKGROUND",-1) b:SetTexture(1,1,1) b:SetGradientAlpha("HORIZONTAL", 0.5, 1, 0, 0.5, 1, 1, 0, 0)
@@ -92,7 +75,7 @@ local function menuHandler(available, active, name, accept, complete)
             SetupBackground(f.QHaste.background)
             local function OnClick(...)
                 local title = f:GetText()
-                if QuestHaste_IsAltDown() and QuestHaste.autolist[title] then
+                if IsAltKeyDown() and QuestHaste.autolist[title] then
                     if contained(available, title) then
                         QuestHaste_RemoveAutoAccept(title)
                     else
@@ -111,7 +94,7 @@ local function menuHandler(available, active, name, accept, complete)
             f.QHaste.background:Hide()
         end
     end
-    if not QuestHaste_IsShiftDown() then
+    if IsShiftKeyDown() == nil then
         local logCompleted = {}
         for k = 1,GetNumQuestLogEntries() do
             local title, _, _, _, _, completed = GetQuestLogTitle(k)
@@ -180,13 +163,13 @@ end
 function QuestHaste_EventHandler.QUEST_PROGRESS()
     local title = GetTitleText()
     
-    if QuestHaste_IsControlDown() then
+    if IsControlKeyDown() then
         QuestHaste_AddAutoComplete(title)
-    elseif QuestHaste_IsAltDown() then
+    elseif IsAltKeyDown() then
         QuestHaste_RemoveAutoComplete(title) return
     end
 
-    if not QuestHaste_IsShiftDown() and IsQuestCompletable() then
+    if (QuestHaste.currentQuest == title or IsShiftKeyDown() == nil) and IsQuestCompletable() then
         QuestHaste.currentQuest = title
         CompleteQuest()
     else
@@ -197,10 +180,10 @@ end
 function QuestHaste_EventHandler.QUEST_COMPLETE()
     local title = GetTitleText()
     
-    if QuestHaste_IsControlDown() then QuestHaste_AddAutoComplete(title)
-    elseif QuestHaste_IsAltDown() then QuestHaste_RemoveAutoComplete(title) return end
+    if IsControlKeyDown() then QuestHaste_AddAutoComplete(title)
+    elseif IsAltKeyDown() then QuestHaste_RemoveAutoComplete(title) return end
     
-    if not QuestHaste_IsShiftDown() and GetNumQuestChoices() == 0 then
+    if (QuestHaste.currentQuest == title or IsShiftKeyDown() == nil) and GetNumQuestChoices() == 0 then
         GetQuestReward()
     end
     QuestHaste.currentQuest = ""
@@ -209,10 +192,10 @@ end
 function QuestHaste_EventHandler.QUEST_DETAIL()
     local title = GetTitleText()
     
-    if QuestHaste_IsControlDown() then QuestHaste_AddAutoAccept(title)
-    elseif QuestHaste_IsAltDown() then QuestHaste_RemoveAutoAccept(title) return end
+    if IsControlKeyDown() then QuestHaste_AddAutoAccept(title)
+    elseif IsAltKeyDown() then QuestHaste_RemoveAutoAccept(title) return end
 
-    if not QuestHaste_IsShiftDown() then
+    if QuestHaste.currentQuest == title or IsShiftKeyDown() == nil then
         AcceptQuest()
     else
         QuestHaste.currentQuest = ""
