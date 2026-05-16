@@ -209,6 +209,7 @@ end
     
 
 function QuestHaste_EventHandler.QUEST_PROGRESS()
+    if pauseForShift() then return end
     if QuestHaste.shiftPaused then return end
     if QuestHaste.suspended then return end
     if not QuestFrame:IsShown() then return end
@@ -223,6 +224,7 @@ function QuestHaste_EventHandler.QUEST_PROGRESS()
 end
 
 function QuestHaste_EventHandler.QUEST_COMPLETE()
+    if pauseForShift() then return end
     if QuestHaste.shiftPaused then return end
     if QuestHaste.suspended then return end
     if not QuestFrame:IsShown() then return end
@@ -242,6 +244,7 @@ function QuestHaste_EventHandler.QUEST_COMPLETE()
 end
 
 function QuestHaste_EventHandler.QUEST_DETAIL()
+    if pauseForShift() then return end
     if QuestHaste.shiftPaused then return end
     if QuestHaste.suspended then return end
     if not QuestFrame:IsShown() then return end
@@ -292,6 +295,7 @@ QuestHaste_EventHandler:SetScript("OnEvent",
 )
 
 function QuestHaste_Proceed()
+    if pauseForShift() then return end
     if QuestHaste.shiftPaused then return end
     if QuestHaste.suspended then return end
 
