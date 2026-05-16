@@ -7,8 +7,10 @@ local QuestHaste_EventList = {
     "QUEST_DETAIL",
     "GOSSIP_SHOW",
     "GOSSIP_CLOSED",
+    "PLAYER_TARGET_CHANGED",
     "QUEST_GREETING",
-    "QUEST_FINISHED"
+    "QUEST_FINISHED",
+    "UI_ERROR_MESSAGE"
 }
 
 local QuestHaste_Usage = [[
@@ -50,6 +52,18 @@ end
 
 local function resetAttempts()
     QuestHaste.attempted = {}
+    QuestHaste.suspended = false
+    QuestHaste.currentQuest = ""
+end
+
+local function closeInteraction()
+    QuestHaste.currentQuest = ""
+    QuestHaste.suspended = true
+
+    if CloseQuest then CloseQuest() end
+    if CloseGossip then CloseGossip() end
+    if HideUIPanel and QuestFrame and QuestFrame:IsShown() then HideUIPanel(QuestFrame) end
+    if HideUIPanel and GossipFrame and GossipFrame:IsShown() then HideUIPanel(GossipFrame) end
 end
 
 local function resetAttemptsIfClosed()
@@ -109,7 +123,9 @@ local function menuHandler(available, active, name, accept, complete)
         end
     end
 
+    local triedAny = false
     for k,v in available do
+        triedAny = true
         if not alreadyTried("accept-menu", v) then
             QuestHaste.currentQuest = v
             accept(k)
@@ -117,15 +133,20 @@ local function menuHandler(available, active, name, accept, complete)
         end
     end
     for k,v in active do
+        triedAny = true
         if not alreadyTried("complete-menu", v) then
             QuestHaste.currentQuest = v
             complete(k)
             return
         end
     end
+    if triedAny then
+        closeInteraction()
+    end
 end
     
 function QuestHaste_EventHandler.GOSSIP_SHOW()
+    if QuestHaste.suspended then return end
     if not GossipFrame:IsShown() then return end
     local available = filterEvens({GetGossipAvailableQuests()})
     local active = filterEvens({GetGossipActiveQuests()})
@@ -134,6 +155,7 @@ function QuestHaste_EventHandler.GOSSIP_SHOW()
 end
 
 function QuestHaste_EventHandler.QUEST_GREETING()
+    if QuestHaste.suspended then return end
     if not QuestFrame:IsShown() then return end
     local available = {}
     local active = {}
@@ -149,6 +171,7 @@ end
     
 
 function QuestHaste_EventHandler.QUEST_PROGRESS()
+    if QuestHaste.suspended then return end
     if not QuestFrame:IsShown() then return end
 
     local title = GetTitleText()
@@ -156,26 +179,37 @@ function QuestHaste_EventHandler.QUEST_PROGRESS()
         QuestHaste.currentQuest = title
         CompleteQuest()
     else
-        QuestHaste.currentQuest = ""
+        closeInteraction()
     end
 end
 
 function QuestHaste_EventHandler.QUEST_COMPLETE()
+    if QuestHaste.suspended then return end
     if not QuestFrame:IsShown() then return end
 
     local title = GetTitleText()
-    if GetNumQuestChoices() == 0 and not alreadyTried("reward", title) then
+    if GetNumQuestChoices() > 0 then
+        QuestHaste.currentQuest = ""
+        return
+    end
+
+    if not alreadyTried("reward", title) then
         GetQuestReward()
+    else
+        closeInteraction()
     end
     QuestHaste.currentQuest = ""
 end
 
 function QuestHaste_EventHandler.QUEST_DETAIL()
+    if QuestHaste.suspended then return end
     if not QuestFrame:IsShown() then return end
 
     local title = GetTitleText()
     if not alreadyTried("detail", title) then
         AcceptQuest()
+    else
+        closeInteraction()
     end
 end
 
@@ -185,6 +219,17 @@ end
 
 function QuestHaste_EventHandler.QUEST_FINISHED()
     resetAttemptsIfClosed()
+end
+
+function QuestHaste_EventHandler.PLAYER_TARGET_CHANGED()
+    resetAttempts()
+    QuestHaste.currentQuest = ""
+end
+
+function QuestHaste_EventHandler.UI_ERROR_MESSAGE()
+    if (QuestHaste.currentQuest ~= nil and QuestHaste.currentQuest ~= "") or QuestFrame:IsShown() or GossipFrame:IsShown() then
+        closeInteraction()
+    end
 end
 
 function QuestHaste_EventHandler.ADDON_LOADED()
@@ -206,18 +251,27 @@ QuestHaste_EventHandler:SetScript("OnEvent",
 )
 
 function QuestHaste_Proceed()
+    if QuestHaste.suspended then return end
+
     if GossipFrame:IsShown() then
-        QuestHaste.currentQuest = GetGossipActiveQuests()
-        SelectGossipActiveQuest(1)
+        local title = GetGossipActiveQuests()
+        if not alreadyTried("complete-menu", title) then
+            QuestHaste.currentQuest = title
+            SelectGossipActiveQuest(1)
+        else
+            closeInteraction()
+        end
     elseif QuestFrame:IsShown() then
         local title = GetTitleText()
-        if QuestFrameAcceptButton:IsShown() then
+        if QuestFrameAcceptButton:IsShown() and not alreadyTried("detail", title) then
             AcceptQuest()
-        elseif QuestFrameCompleteButton:IsShown() and IsQuestCompletable() then
+        elseif QuestFrameCompleteButton:IsShown() and IsQuestCompletable() and not alreadyTried("progress", title) then
             QuestHaste.currentQuest = title
             CompleteQuest()
-        elseif QuestFrameCompleteQuestButton:IsShown() and IsQuestCompletable() then
+        elseif QuestFrameCompleteQuestButton:IsShown() and IsQuestCompletable() and not alreadyTried("reward", title) then
             GetQuestReward()
+        else
+            closeInteraction()
         end
     end
 end
@@ -231,6 +285,7 @@ local function CommandParser(msg, editbox)
         QuestHaste_UnregisterEvents()
     elseif command == "resume" then
         DEFAULT_CHAT_FRAME:AddMessage("|cffffff88QuestHaste|r: |cff00ff00active|r.")
+        resetAttempts()
         QuestHaste_RegisterEvents()
     elseif command == "complete" then
         QuestHaste_Proceed()
