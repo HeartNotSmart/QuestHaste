@@ -12,14 +12,14 @@ QuestHaste is a small Addon for vanilla World of Warcraft (1.12), it allows fast
 | :---:         | ---
 | Control       | auto complete/accept and save
 | Alt           | forget
-| Shift         | complete/accept if not saved, hold if saved
-| None          | complete/accept if saved
+| Shift         | hold
+| None          | complete/accept
 
 ### Gossip opening modifiers
 
 | Modifier      | Action
 | :---:         | ---
-| Shift         | auto complete/accept quest in gossip  
+| None          | auto complete/accept quest in gossip  
 |               | (priority: completed, available saved,  
 |               | active saved, available, active)
 

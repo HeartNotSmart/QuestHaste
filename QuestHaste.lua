@@ -15,10 +15,10 @@ local QuestHaste_Usage = [[
 * Quest (active and available) opening/progress modifiers
     * Control   auto complete/accept and save
     * Alt   forget
-    * Shift   complete/accept if not saved, hold if saved
-    * No Modifier   complete/accept if saved
+    * Shift   hold
+    * No Modifier   complete/accept
 * Gossip opening modifiers
-    * Shift   auto complete/accept quest in gossip
+    * No Modifier   auto complete/accept quest in gossip
         (priority: completed, available saved,
         active saved, available, active)
 * Command line options (/qhaste, /questhaste):
@@ -94,7 +94,7 @@ local function menuHandler(available, active, name, accept, complete)
             f.QHaste.background:Hide()
         end
     end
-    if IsShiftKeyDown() then
+    if not IsShiftKeyDown() then
         local logCompleted = {}
         for k = 1,GetNumQuestLogEntries() do
             local title, _, _, _, _, completed = GetQuestLogTitle(k)
@@ -169,7 +169,7 @@ function QuestHaste_EventHandler.QUEST_PROGRESS()
         QuestHaste_RemoveAutoComplete(title) return
     end
 
-    if (QuestHaste.currentQuest == title or QuestHaste_IsAutoComplete(title) ~= (IsShiftKeyDown() ~= nil)) and IsQuestCompletable() then
+    if not IsShiftKeyDown() and IsQuestCompletable() then
         QuestHaste.currentQuest = title
         CompleteQuest()
     else
@@ -183,7 +183,7 @@ function QuestHaste_EventHandler.QUEST_COMPLETE()
     if IsControlKeyDown() then QuestHaste_AddAutoComplete(title)
     elseif IsAltKeyDown() then QuestHaste_RemoveAutoComplete(title) return end
     
-    if (QuestHaste.currentQuest == title or QuestHaste_IsAutoComplete(title) ~= (IsShiftKeyDown() ~= nil)) and GetNumQuestChoices() == 0 then
+    if not IsShiftKeyDown() and GetNumQuestChoices() == 0 then
         GetQuestReward()
     end
     QuestHaste.currentQuest = ""
@@ -195,7 +195,7 @@ function QuestHaste_EventHandler.QUEST_DETAIL()
     if IsControlKeyDown() then QuestHaste_AddAutoAccept(title)
     elseif IsAltKeyDown() then QuestHaste_RemoveAutoAccept(title) return end
 
-    if QuestHaste.currentQuest == title or QuestHaste_IsAutoAccept(title) ~= (IsShiftKeyDown() ~= nil) then
+    if not IsShiftKeyDown() then
         AcceptQuest()
     else
         QuestHaste.currentQuest = ""
