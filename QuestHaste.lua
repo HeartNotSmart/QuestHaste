@@ -53,17 +53,32 @@ end
 local function resetAttempts()
     QuestHaste.attempted = {}
     QuestHaste.suspended = false
+    QuestHaste.suspendedAt = nil
     QuestHaste.currentQuest = ""
 end
 
 local function closeInteraction()
     QuestHaste.currentQuest = ""
     QuestHaste.suspended = true
+    QuestHaste.suspendedAt = GetTime()
 
     if CloseQuest then CloseQuest() end
     if CloseGossip then CloseGossip() end
     if HideUIPanel and QuestFrame and QuestFrame:IsShown() then HideUIPanel(QuestFrame) end
     if HideUIPanel and GossipFrame and GossipFrame:IsShown() then HideUIPanel(GossipFrame) end
+end
+
+local function allowRetryAfterSuspension()
+    if not QuestHaste.suspended then
+        return true
+    end
+
+    if QuestHaste.suspendedAt and GetTime() - QuestHaste.suspendedAt > 1 then
+        resetAttempts()
+        return true
+    end
+
+    return false
 end
 
 local function resetAttemptsIfClosed()
@@ -151,7 +166,7 @@ local function menuHandler(available, active, name, accept, complete)
 end
     
 function QuestHaste_EventHandler.GOSSIP_SHOW()
-    if QuestHaste.suspended then return end
+    if not allowRetryAfterSuspension() then return end
     if not GossipFrame:IsShown() then return end
     local available = filterEvens({GetGossipAvailableQuests()})
     local active = filterEvens({GetGossipActiveQuests()})
@@ -160,7 +175,7 @@ function QuestHaste_EventHandler.GOSSIP_SHOW()
 end
 
 function QuestHaste_EventHandler.QUEST_GREETING()
-    if QuestHaste.suspended then return end
+    if not allowRetryAfterSuspension() then return end
     if not QuestFrame:IsShown() then return end
     local available = {}
     local active = {}
