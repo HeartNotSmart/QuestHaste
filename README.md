@@ -6,13 +6,12 @@ QuestHaste is a small Addon for vanilla World of Warcraft (1.12), it allows fast
 
 ## Usage:
 
-### Quest (active and available) opening/progress modifiers
+### Quest (active and available) opening/progress
 
 | Modifier      | Action
 | :---:         | ---
 | Control       | auto complete/accept and save
 | Alt           | forget
-| Shift         | hold
 | None          | complete/accept
 
 ### Gossip opening modifiers
@@ -20,8 +19,7 @@ QuestHaste is a small Addon for vanilla World of Warcraft (1.12), it allows fast
 | Modifier      | Action
 | :---:         | ---
 | None          | auto complete/accept quest in gossip  
-|               | (priority: completed, available saved,  
-|               | active saved, available, active)
+|               | (priority: completed, available, active)
 
 ### Chat commands (/qhaste, /questhaste)
 | Command   | Action
