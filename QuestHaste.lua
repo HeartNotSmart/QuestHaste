@@ -67,6 +67,11 @@ local function closeInteraction()
 end
 
 local function resetAttemptsIfClosed()
+    if QuestHaste.suspended then
+        QuestHaste.currentQuest = ""
+        return
+    end
+
     if not GossipFrame:IsShown() and not QuestFrame:IsShown() then
         resetAttempts()
         QuestHaste.currentQuest = ""
