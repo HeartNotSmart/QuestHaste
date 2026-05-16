@@ -19,6 +19,7 @@ local QuestHaste_Usage = [[
 * Quest (active and available) opening/progress
     * complete/accept
 * Gossip opening modifiers
+    * Shift   pause automation for this interaction
     * No Modifier   auto complete/accept quest in gossip
         (priority: completed, available, active)
 * Command line options (/qhaste, /questhaste):
@@ -54,6 +55,7 @@ local function resetAttempts()
     QuestHaste.attempted = {}
     QuestHaste.suspended = false
     QuestHaste.suspendedAt = nil
+    QuestHaste.shiftPaused = false
     QuestHaste.currentQuest = ""
 end
 
@@ -76,6 +78,20 @@ local function allowRetryAfterSuspension()
     if QuestHaste.suspendedAt and GetTime() - QuestHaste.suspendedAt > 1 then
         resetAttempts()
         return true
+    end
+
+    return false
+end
+
+local function pauseForShift()
+    if IsShiftKeyDown() then
+        QuestHaste.shiftPaused = true
+        QuestHaste.currentQuest = ""
+        return true
+    end
+
+    if QuestHaste.shiftPaused then
+        resetAttempts()
     end
 
     return false
@@ -166,6 +182,7 @@ local function menuHandler(available, active, name, accept, complete)
 end
     
 function QuestHaste_EventHandler.GOSSIP_SHOW()
+    if pauseForShift() then return end
     if not allowRetryAfterSuspension() then return end
     if not GossipFrame:IsShown() then return end
     local available = filterEvens({GetGossipAvailableQuests()})
@@ -175,6 +192,7 @@ function QuestHaste_EventHandler.GOSSIP_SHOW()
 end
 
 function QuestHaste_EventHandler.QUEST_GREETING()
+    if pauseForShift() then return end
     if not allowRetryAfterSuspension() then return end
     if not QuestFrame:IsShown() then return end
     local available = {}
@@ -191,6 +209,7 @@ end
     
 
 function QuestHaste_EventHandler.QUEST_PROGRESS()
+    if QuestHaste.shiftPaused then return end
     if QuestHaste.suspended then return end
     if not QuestFrame:IsShown() then return end
 
@@ -204,6 +223,7 @@ function QuestHaste_EventHandler.QUEST_PROGRESS()
 end
 
 function QuestHaste_EventHandler.QUEST_COMPLETE()
+    if QuestHaste.shiftPaused then return end
     if QuestHaste.suspended then return end
     if not QuestFrame:IsShown() then return end
 
@@ -222,6 +242,7 @@ function QuestHaste_EventHandler.QUEST_COMPLETE()
 end
 
 function QuestHaste_EventHandler.QUEST_DETAIL()
+    if QuestHaste.shiftPaused then return end
     if QuestHaste.suspended then return end
     if not QuestFrame:IsShown() then return end
 
@@ -271,6 +292,7 @@ QuestHaste_EventHandler:SetScript("OnEvent",
 )
 
 function QuestHaste_Proceed()
+    if QuestHaste.shiftPaused then return end
     if QuestHaste.suspended then return end
 
     if GossipFrame:IsShown() then

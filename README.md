@@ -9,11 +9,13 @@ QuestHaste is a small Addon for vanilla World of Warcraft (1.12), it allows fast
 ### Quest (active and available) opening/progress
 
 QuestHaste automatically accepts and completes quests when possible.
+Hold Shift when starting an NPC interaction to pause automation for that interaction.
 
 ### Gossip opening modifiers
 
 | Modifier      | Action
 | :---:         | ---
+| Shift         | pause automation for this interaction
 | None          | auto complete/accept quest in gossip  
 |               | (priority: completed, available, active)
 
