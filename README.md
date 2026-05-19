@@ -1,40 +1,46 @@
-# QuestHaste 0.4 by Woblight
+# QuestHaste
 
-## Intro:
+## Intro
 
-QuestHaste is a small Addon for vanilla World of Warcraft (1.12), it allows fast turn in of quests, especially useful for repeatable quests (e.g. Alterac Valley quests)
+QuestHaste is a small addon for vanilla World of Warcraft (1.12). It automatically accepts available quests and advances completed quests without requiring modifier keys.
 
-## Usage:
+Hold Shift while interacting with an NPC to pause automatic quest actions.
 
-### Quest (active and available) opening/progress
+When a quest reaches the final reward pane, QuestHaste stops only if there is a reward choice.
 
-QuestHaste automatically accepts and completes quests when possible.
-Hold Shift when starting an NPC interaction to pause automation for that interaction.
+## Behavior
 
-### Gossip opening modifiers
+When opening an NPC quest or gossip window, QuestHaste selects quests in this order:
 
-| Modifier      | Action
-| :---:         | ---
-| Shift         | pause automation for this interaction
-| None          | auto complete/accept quest in gossip  
-|               | (priority: completed, available, active)
+1. Completed active quest
+2. First available quest
+3. First active quest
 
-### Chat commands (/qhaste, /questhaste)
-| Command   | Action
-| :---:     |   ---
-| usage     | display usage instructions
-| pause     | disable QuestHaste
-| resume    | activate QuestHaste
-| complete  | complete/accept current quest
+Quest pages are handled automatically:
 
+| Page | Action |
+| :--- | --- |
+| Quest detail | Accepts the quest |
+| Quest progress | Completes the quest if objectives are done |
+| Quest reward | Completes automatically unless there is a reward choice |
 
-## Thanks to:
+## Chat Commands
+
+| Command | Action |
+| :--- | --- |
+| `/qhaste usage` | Display usage instructions |
+| `/qhaste pause` | Disable QuestHaste |
+| `/qhaste resume` | Activate QuestHaste |
+| `/qhaste complete` | Advance the currently visible quest dialog |
+
+## Thanks
 
 JuuJuu
 
-## Change Log:
+## Change Log
 
 ### Version 0.4
+
 * Added missing NPC dialog type.
 * Now scans QuestLog for completed quests when opening a NPC dialog.
 * Fixed error message for quests with reward choice.
